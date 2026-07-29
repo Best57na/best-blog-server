@@ -1,7 +1,7 @@
 import express from "express";
 
 const app = express();
-const port = 4000;
+const port = process.env.PORT || 4000;
 
 const profiles = {
   john: {
@@ -9,6 +9,9 @@ const profiles = {
     age: 20,
   },
 };
+
+app.use(cors());
+app.use(express.json());
 
 app.get("/profiles", (req, res) => {
   res.status(200).json({ data: profiles.john });
