@@ -20,20 +20,58 @@ const RESULT_SCHEMA = {
   type: "object",
   properties: {
     destination: { type: "string" },
+    needsFlight: {
+      type: "boolean",
+      description: "Whether flying is realistically required to get from the origin to the destination. False for nearby/domestic trips reachable by land or sea.",
+    },
     flights: {
-      type: "object",
-      properties: {
-        duration: {
-          type: "string",
-          description: "Estimated flight duration in Thai, e.g. '6h 30m (บินตรง)'",
+      anyOf: [
+        {
+          type: "object",
+          properties: {
+            duration: {
+              type: "string",
+              description: "Estimated flight duration in Thai, e.g. '6h 30m (บินตรง)'",
+            },
+            priceRange: {
+              type: "string",
+              description: "Estimated round-trip price range in Thai Baht, e.g. '฿12,000 - 18,000'",
+            },
+          },
+          required: ["duration", "priceRange"],
+          additionalProperties: false,
         },
-        priceRange: {
-          type: "string",
-          description: "Estimated round-trip price range in Thai Baht, e.g. '฿12,000 - 18,000'",
+        { type: "null" },
+      ],
+      description: "Flight estimate, or null when needsFlight is false",
+    },
+    route: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Short Thai step title, e.g. 'จากสนามบินถึงตัวเมือง'" },
+          desc: { type: "string", description: "Thai description of this leg: transport options, rough time and cost" },
         },
+        required: ["title", "desc"],
+        additionalProperties: false,
       },
-      required: ["duration", "priceRange"],
-      additionalProperties: false,
+      description: "3-5 step-by-step directions in Thai from the arrival point (airport/train station/border) all the way to the destination",
+    },
+    accommodation: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Thai name or type of accommodation, e.g. 'โรงแรมย่านใจกลางเมือง'" },
+          area: { type: "string", description: "Thai description of the neighborhood/area" },
+          priceRange: { type: "string", description: "Price per night range in Thai Baht" },
+          desc: { type: "string" },
+        },
+        required: ["name", "area", "priceRange", "desc"],
+        additionalProperties: false,
+      },
+      description: "Exactly 3 accommodation suggestions in Thai matching the requested travel style",
     },
     weather: {
       type: "string",
@@ -90,12 +128,12 @@ const RESULT_SCHEMA = {
       description: "Thai Instagram-style captions with relevant hashtags",
     },
   },
-  required: ["destination", "flights", "weather", "budget", "spots", "food", "captions"],
+  required: ["destination", "needsFlight", "flights", "route", "accommodation", "weather", "budget", "spots", "food", "captions"],
   additionalProperties: false,
 };
 
 router.post("/travel-plan", limiter, async (req, res) => {
-  const { destination, dates, style, activities } = req.body || {};
+  const { origin, destination, dates, style, activities } = req.body || {};
 
   if (!destination || typeof destination !== "string" || !destination.trim()) {
     return res.status(400).json({ message: "Destination is required" });
@@ -105,10 +143,11 @@ router.post("/travel-plan", limiter, async (req, res) => {
   }
 
   const safeDestination = destination.trim();
+  const safeOrigin = typeof origin === "string" ? origin.slice(0, 100).trim() : "";
   const safeDates = typeof dates === "string" ? dates.slice(0, 100).trim() : "";
   const safeStyle = STYLES.includes(style) ? style : "Mid-range";
   const safeActivities = Array.isArray(activities)
-    ? activities.filter((a) => typeof a === "string").slice(0, 10)
+    ? activities.filter((a) => typeof a === "string").map((a) => a.slice(0, 60)).slice(0, 20)
     : [];
 
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -118,13 +157,13 @@ router.post("/travel-plan", limiter, async (req, res) => {
   try {
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5",
-      max_tokens: 2048,
+      max_tokens: 4096,
       system:
-        "You are a Thai-speaking travel planning assistant for a travel blog. Given a destination and trip preferences, generate a realistic, specific travel plan. Write every user-facing text field (weather, budget labels, spot/food names and descriptions, captions) in natural, friendly Thai matching a travel blogger's tone. Keep monetary amounts in Thai Baht (฿). Give exactly 3 items each for spots, food, and captions. Base estimates on real-world knowledge of the destination; if unsure of exact prices, give a reasonable realistic range instead of refusing.",
+        "You are a Thai-speaking travel planning assistant for a travel blog. Given an origin, a destination, and trip preferences, generate a realistic, specific travel plan. Write every user-facing text field (weather, route steps, accommodation, budget labels, spot/food names and descriptions, captions) in natural, friendly Thai matching a travel blogger's tone. Keep monetary amounts in Thai Baht (฿). Decide needsFlight based on real-world geography: false when the origin and destination are close enough to reach by car, bus, train, or ferry (e.g. domestic trips or nearby countries with land/sea routes); true otherwise. Set flights to null when needsFlight is false. Always fill route with 3-5 concrete steps covering the whole journey from the origin to the destination door-to-door (e.g. airport/train station arrival, immigration if international, onward transport, last-mile to the destination area), regardless of needsFlight. Give exactly 3 items each for accommodation, spots, food, and captions. Base estimates on real-world knowledge of the origin and destination; if unsure of exact prices, give a reasonable realistic range instead of refusing. If origin is not specified, assume the traveler is coming from outside the destination country and a flight is required.",
       messages: [
         {
           role: "user",
-          content: `Destination: ${safeDestination}\nTravel dates: ${safeDates || "not specified"}\nTravel style: ${safeStyle}\nPreferred activities: ${safeActivities.join(", ") || "not specified"}`,
+          content: `Origin: ${safeOrigin || "not specified"}\nDestination: ${safeDestination}\nTravel dates: ${safeDates || "not specified"}\nTravel style: ${safeStyle}\nPreferred activities: ${safeActivities.join(", ") || "not specified"}`,
         },
       ],
       output_config: {
@@ -135,6 +174,9 @@ router.post("/travel-plan", limiter, async (req, res) => {
     if (response.stop_reason === "refusal") {
       return res.status(422).json({ message: "AI could not generate a plan for this request" });
     }
+    if (response.stop_reason === "max_tokens") {
+      return res.status(502).json({ message: "AI response was too long to complete, please try again" });
+    }
 
     const textBlock = response.content.find((block) => block.type === "text");
     if (!textBlock) {
@@ -142,6 +184,11 @@ router.post("/travel-plan", limiter, async (req, res) => {
     }
 
     const plan = JSON.parse(textBlock.text);
+    const requiredArrays = ["route", "accommodation", "spots", "food", "captions"];
+    if (requiredArrays.some((key) => !Array.isArray(plan[key]) || plan[key].length === 0)) {
+      return res.status(502).json({ message: "AI returned an incomplete plan, please try again" });
+    }
+
     plan.generatedAt = new Date().toISOString();
 
     return res.status(200).json({ plan });
