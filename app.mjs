@@ -12,7 +12,7 @@ const port = process.env.PORT || 4000;
 
 const allowedOrigins = (
   process.env.ALLOWED_ORIGINS ||
-  "https://best-blog.vercel.app,http://localhost:5173"
+  "https://best-blog-zeta.vercel.app,http://localhost:5173"
 )
   .split(",")
   .map((origin) => origin.trim());
