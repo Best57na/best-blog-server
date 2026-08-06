@@ -3,12 +3,19 @@ import multer from "multer";
 import { createClient } from "@supabase/supabase-js";
 import { validatePostData } from "../middlewares/validatePostData.mjs";
 import protectAdmin from "../middlewares/protectAdmin.mjs";
+import protectUser from "../middlewares/protectUser.mjs";
 import {
   getPosts,
   getPostById,
   updatePost,
   deletePost,
 } from "../controllers/postController.mjs";
+import {
+  getComments,
+  createComment,
+  deleteComment,
+} from "../controllers/commentController.mjs";
+import { getLikeStatus, toggleLike } from "../controllers/likeController.mjs";
 
 const supabaseStorage = createClient(
   process.env.SUPABASE_URL,
@@ -58,5 +65,12 @@ router.put(
   updatePost
 );
 router.delete("/:postId", protectAdmin, deletePost);
+
+router.get("/:postId/comments", getComments);
+router.post("/:postId/comments", protectUser, createComment);
+router.delete("/:postId/comments/:commentId", protectUser, deleteComment);
+
+router.get("/:postId/likes/me", protectUser, getLikeStatus);
+router.post("/:postId/likes/toggle", protectUser, toggleLike);
 
 export default router;
