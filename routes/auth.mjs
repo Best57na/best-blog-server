@@ -5,6 +5,10 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY
 );
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 const authRouter = Router();
 
 authRouter.post("/register", async (req, res) => {
@@ -39,17 +43,22 @@ authRouter.post("/register", async (req, res) => {
     }
 
     const supabaseUserId = data.user.id;
-    const query = `
-      INSERT INTO users (id, username, name, role)
-      VALUES ($1, $2, $3, $4)
-      RETURNING *;
-    `;
-    const values = [supabaseUserId, username, name, "user"];
-    const { rows } = await connectionPool.query(query, values);
-    res.status(201).json({
-      message: "User created successfully",
-      user: rows[0],
-    });
+    try {
+      const query = `
+        INSERT INTO users (id, username, name, role)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *;
+      `;
+      const values = [supabaseUserId, username, name, "user"];
+      const { rows } = await connectionPool.query(query, values);
+      res.status(201).json({
+        message: "User created successfully",
+        user: rows[0],
+      });
+    } catch (dbError) {
+      await supabaseAdmin.auth.admin.deleteUser(supabaseUserId);
+      res.status(500).json({ error: "An error occurred during registration" });
+    }
   } catch (error) {
     res.status(500).json({ error: "An error occurred during registration" });
   }
@@ -99,6 +108,9 @@ authRouter.get("/get-user", async (req, res) => {
     `;
     const values = [supabaseUserId];
     const { rows } = await connectionPool.query(query, values);
+    if (!rows.length) {
+      return res.status(404).json({ error: "User profile not found" });
+    }
     res.status(200).json({
       id: data.user.id,
       email: data.user.email,
@@ -122,7 +134,12 @@ authRouter.put("/reset-password", async (req, res) => {
     return res.status(400).json({ error: "New password is required" });
   }
   try {
-    const { data: userData } = await supabase.auth.getUser(token);
+    const { data: userData, error: userError } = await supabase.auth.getUser(
+      token
+    );
+    if (userError || !userData.user) {
+      return res.status(401).json({ error: "Unauthorized or token expired" });
+    }
     const { error: loginError } = await supabase.auth.signInWithPassword({
       email: userData.user.email,
       password: oldPassword,
@@ -130,9 +147,10 @@ authRouter.put("/reset-password", async (req, res) => {
     if (loginError) {
       return res.status(400).json({ error: "Invalid old password" });
     }
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(
+      userData.user.id,
+      { password: newPassword }
+    );
     if (error) {
       return res.status(400).json({ error: error.message });
     }
