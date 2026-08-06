@@ -31,7 +31,7 @@ const RESULT_SCHEMA = {
           properties: {
             duration: {
               type: "string",
-              description: "Estimated flight duration in Thai, e.g. '6h 30m (บินตรง)'",
+              description: "Estimated flight duration, e.g. '6h 30m (direct)'",
             },
             priceRange: {
               type: "string",
@@ -50,32 +50,32 @@ const RESULT_SCHEMA = {
       items: {
         type: "object",
         properties: {
-          title: { type: "string", description: "Short Thai step title, e.g. 'จากสนามบินถึงตัวเมือง'" },
-          desc: { type: "string", description: "Thai description of this leg: transport options, rough time and cost" },
+          title: { type: "string", description: "Short step title, e.g. 'Airport to city center'" },
+          desc: { type: "string", description: "Description of this leg: transport options, rough time and cost" },
         },
         required: ["title", "desc"],
         additionalProperties: false,
       },
-      description: "3-5 step-by-step directions in Thai from the arrival point (airport/train station/border) all the way to the destination",
+      description: "3-5 step-by-step directions from the arrival point (airport/train station/border) all the way to the destination",
     },
     accommodation: {
       type: "array",
       items: {
         type: "object",
         properties: {
-          name: { type: "string", description: "Thai name or type of accommodation, e.g. 'โรงแรมย่านใจกลางเมือง'" },
-          area: { type: "string", description: "Thai description of the neighborhood/area" },
+          name: { type: "string", description: "Name or type of accommodation, e.g. 'City-center hotel'" },
+          area: { type: "string", description: "Description of the neighborhood/area" },
           priceRange: { type: "string", description: "Price per night range in Thai Baht" },
           desc: { type: "string" },
         },
         required: ["name", "area", "priceRange", "desc"],
         additionalProperties: false,
       },
-      description: "Exactly 3 accommodation suggestions in Thai matching the requested travel style",
+      description: "Exactly 3 accommodation suggestions matching the requested travel style",
     },
     weather: {
       type: "string",
-      description: "Short weather summary for the travel dates, written in Thai",
+      description: "Short weather summary for the travel dates",
     },
     budget: {
       type: "object",
@@ -86,7 +86,7 @@ const RESULT_SCHEMA = {
           items: {
             type: "object",
             properties: {
-              label: { type: "string", description: "Thai budget category label, e.g. 'ที่พัก'" },
+              label: { type: "string", description: "Budget category label, e.g. 'Accommodation'" },
               percent: { type: "integer" },
               amount: { type: "string" },
             },
@@ -125,18 +125,18 @@ const RESULT_SCHEMA = {
     captions: {
       type: "array",
       items: { type: "string" },
-      description: "Thai Instagram-style captions with relevant hashtags",
+      description: "Instagram-style captions with relevant hashtags",
     },
     packing: {
       type: "array",
       items: {
         type: "object",
         properties: {
-          category: { type: "string", description: "Thai packing category name, e.g. 'เสื้อผ้า', 'อุปกรณ์อิเล็กทรอนิกส์', 'เอกสาร'" },
+          category: { type: "string", description: "Packing category name, e.g. 'Clothing', 'Electronics', 'Documents'" },
           items: {
             type: "array",
             items: { type: "string" },
-            description: "Specific packing items in Thai for this category",
+            description: "Specific packing items for this category",
           },
         },
         required: ["category", "items"],
@@ -176,7 +176,7 @@ router.post("/travel-plan", limiter, async (req, res) => {
       model: "claude-haiku-4-5",
       max_tokens: 5120,
       system:
-        "You are a Thai-speaking travel planning assistant for a travel blog. Given an origin, a destination, and trip preferences, generate a realistic, specific travel plan. Write every user-facing text field (weather, route steps, accommodation, budget labels, spot/food names and descriptions, captions, packing categories and items) in natural, friendly Thai matching a travel blogger's tone. Keep monetary amounts in Thai Baht (฿). Decide needsFlight based on real-world geography: false when the origin and destination are close enough to reach by car, bus, train, or ferry (e.g. domestic trips or nearby countries with land/sea routes); true otherwise. Set flights to null when needsFlight is false. Always fill route with 3-5 concrete steps covering the whole journey from the origin to the destination door-to-door (e.g. airport/train station arrival, immigration if international, onward transport, last-mile to the destination area), regardless of needsFlight. Give exactly 3 items each for accommodation, spots, food, and captions. For packing, tailor 3-5 categories and their items specifically to this trip: consider the destination's actual climate for the given dates, the travel style, and the selected activities (e.g. include hiking boots and a rain cover only if hiking/nature activities were chosen, swimwear only for beach destinations, warm layers only for cold destinations) — do not default to a generic list. Base estimates on real-world knowledge of the origin and destination; if unsure of exact prices, give a reasonable realistic range instead of refusing. If origin is not specified, assume the traveler is coming from outside the destination country and a flight is required.",
+        "You are a travel planning assistant for a travel blog. Given an origin, a destination, and trip preferences, generate a realistic, specific travel plan. Write every user-facing text field (weather, route steps, accommodation, budget labels, spot/food names and descriptions, captions, packing categories and items) in natural, friendly English matching a travel blogger's tone. Keep monetary amounts in Thai Baht (฿). Decide needsFlight based on real-world geography: false when the origin and destination are close enough to reach by car, bus, train, or ferry (e.g. domestic trips or nearby countries with land/sea routes); true otherwise. Set flights to null when needsFlight is false. Always fill route with 3-5 concrete steps covering the whole journey from the origin to the destination door-to-door (e.g. airport/train station arrival, immigration if international, onward transport, last-mile to the destination area), regardless of needsFlight. Give exactly 3 items each for accommodation, spots, food, and captions. For packing, tailor 3-5 categories and their items specifically to this trip: consider the destination's actual climate for the given dates, the travel style, and the selected activities (e.g. include hiking boots and a rain cover only if hiking/nature activities were chosen, swimwear only for beach destinations, warm layers only for cold destinations) — do not default to a generic list. Base estimates on real-world knowledge of the origin and destination; if unsure of exact prices, give a reasonable realistic range instead of refusing. If origin is not specified, assume the traveler is coming from outside the destination country and a flight is required.",
       messages: [
         {
           role: "user",
