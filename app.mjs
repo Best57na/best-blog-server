@@ -6,6 +6,7 @@ import postRouter from "./routes/posts.mjs";
 import authRouter from "./routes/auth.mjs";
 import categoryRouter from "./routes/categories.mjs";
 import postUploadRouter from "./apps/postRoutes.mjs";
+import aiTravelSuiteRouter from "./routes/aiTravelSuite.mjs";
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -29,6 +30,7 @@ app.use("/posts", postRouter);
 app.use("/posts", postUploadRouter);
 app.use("/categories", categoryRouter);
 app.use("/auth", authRouter);
+app.use("/ai", aiTravelSuiteRouter);
 
 if (!process.env.VERCEL) {
   app.listen(port, () => {
