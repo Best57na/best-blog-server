@@ -11,11 +11,16 @@ export function validatePostData(req, res, next) {
   const body = req.body;
 
   for (const { key, label, type } of fields) {
-    if (body[key] === undefined) {
+    if (body[key] === undefined || body[key] === "") {
       return res.status(400).json({ message: `${label} is required` });
     }
 
-    if (typeof body[key] !== type) {
+    if (type === "number") {
+      if (Number.isNaN(Number(body[key]))) {
+        return res.status(400).json({ message: `${label} must be a ${type}` });
+      }
+      body[key] = Number(body[key]);
+    } else if (typeof body[key] !== type) {
       return res.status(400).json({ message: `${label} must be a ${type}` });
     }
   }
