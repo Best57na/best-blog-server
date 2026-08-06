@@ -127,8 +127,25 @@ const RESULT_SCHEMA = {
       items: { type: "string" },
       description: "Thai Instagram-style captions with relevant hashtags",
     },
+    packing: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          category: { type: "string", description: "Thai packing category name, e.g. 'เสื้อผ้า', 'อุปกรณ์อิเล็กทรอนิกส์', 'เอกสาร'" },
+          items: {
+            type: "array",
+            items: { type: "string" },
+            description: "Specific packing items in Thai for this category",
+          },
+        },
+        required: ["category", "items"],
+        additionalProperties: false,
+      },
+      description: "3-5 packing categories tailored to this specific trip's weather, destination, style, and activities (e.g. cold-weather gear only if the destination is cold, hiking gear if activities include hiking)",
+    },
   },
-  required: ["destination", "needsFlight", "flights", "route", "accommodation", "weather", "budget", "spots", "food", "captions"],
+  required: ["destination", "needsFlight", "flights", "route", "accommodation", "weather", "budget", "spots", "food", "captions", "packing"],
   additionalProperties: false,
 };
 
@@ -157,9 +174,9 @@ router.post("/travel-plan", limiter, async (req, res) => {
   try {
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5",
-      max_tokens: 4096,
+      max_tokens: 5120,
       system:
-        "You are a Thai-speaking travel planning assistant for a travel blog. Given an origin, a destination, and trip preferences, generate a realistic, specific travel plan. Write every user-facing text field (weather, route steps, accommodation, budget labels, spot/food names and descriptions, captions) in natural, friendly Thai matching a travel blogger's tone. Keep monetary amounts in Thai Baht (฿). Decide needsFlight based on real-world geography: false when the origin and destination are close enough to reach by car, bus, train, or ferry (e.g. domestic trips or nearby countries with land/sea routes); true otherwise. Set flights to null when needsFlight is false. Always fill route with 3-5 concrete steps covering the whole journey from the origin to the destination door-to-door (e.g. airport/train station arrival, immigration if international, onward transport, last-mile to the destination area), regardless of needsFlight. Give exactly 3 items each for accommodation, spots, food, and captions. Base estimates on real-world knowledge of the origin and destination; if unsure of exact prices, give a reasonable realistic range instead of refusing. If origin is not specified, assume the traveler is coming from outside the destination country and a flight is required.",
+        "You are a Thai-speaking travel planning assistant for a travel blog. Given an origin, a destination, and trip preferences, generate a realistic, specific travel plan. Write every user-facing text field (weather, route steps, accommodation, budget labels, spot/food names and descriptions, captions, packing categories and items) in natural, friendly Thai matching a travel blogger's tone. Keep monetary amounts in Thai Baht (฿). Decide needsFlight based on real-world geography: false when the origin and destination are close enough to reach by car, bus, train, or ferry (e.g. domestic trips or nearby countries with land/sea routes); true otherwise. Set flights to null when needsFlight is false. Always fill route with 3-5 concrete steps covering the whole journey from the origin to the destination door-to-door (e.g. airport/train station arrival, immigration if international, onward transport, last-mile to the destination area), regardless of needsFlight. Give exactly 3 items each for accommodation, spots, food, and captions. For packing, tailor 3-5 categories and their items specifically to this trip: consider the destination's actual climate for the given dates, the travel style, and the selected activities (e.g. include hiking boots and a rain cover only if hiking/nature activities were chosen, swimwear only for beach destinations, warm layers only for cold destinations) — do not default to a generic list. Base estimates on real-world knowledge of the origin and destination; if unsure of exact prices, give a reasonable realistic range instead of refusing. If origin is not specified, assume the traveler is coming from outside the destination country and a flight is required.",
       messages: [
         {
           role: "user",
@@ -184,7 +201,7 @@ router.post("/travel-plan", limiter, async (req, res) => {
     }
 
     const plan = JSON.parse(textBlock.text);
-    const requiredArrays = ["route", "accommodation", "spots", "food", "captions"];
+    const requiredArrays = ["route", "accommodation", "spots", "food", "captions", "packing"];
     if (requiredArrays.some((key) => !Array.isArray(plan[key]) || plan[key].length === 0)) {
       return res.status(502).json({ message: "AI returned an incomplete plan, please try again" });
     }
