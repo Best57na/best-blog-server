@@ -85,9 +85,32 @@ authRouter.post("/login", async (req, res) => {
     return res.status(200).json({
       message: "Signed in successfully",
       access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+      expires_at: data.session.expires_at,
     });
   } catch (error) {
     return res.status(500).json({ error: "An error occurred during login" });
+  }
+});
+
+authRouter.post("/refresh", async (req, res) => {
+  const { refresh_token } = req.body || {};
+  if (!refresh_token) {
+    return res.status(400).json({ error: "Refresh token is required" });
+  }
+  try {
+    const { data, error } = await supabase.auth.refreshSession({ refresh_token });
+    if (error || !data.session) {
+      return res.status(401).json({ error: "Unauthorized: Invalid or expired refresh token" });
+    }
+    return res.status(200).json({
+      message: "Session refreshed",
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+      expires_at: data.session.expires_at,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
